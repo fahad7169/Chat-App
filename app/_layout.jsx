@@ -4,6 +4,8 @@ import { Stack } from 'expo-router'
 import { useFonts } from 'expo-font';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
+import { ChatProvider } from '../context/ChatContext';
+import { NotificationProvider } from '../context/NotificationContext';
 
 SplashScreen.preventAutoHideAsync();
 SplashScreen.setOptions({
@@ -42,6 +44,8 @@ const RootLayout = () => {
   
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <ChatProvider>
+        <NotificationProvider>
    <Stack screenOptions={{
      contentStyle: { backgroundColor: '#1F2833' }, // Dark background
    }}>
@@ -52,6 +56,8 @@ const RootLayout = () => {
     <Stack.Screen name="contacts/index" options={{ headerShown: false }}/>
    </Stack>
     <StatusBar style="light" />
+    </NotificationProvider>
+    </ChatProvider>
    </GestureHandlerRootView>
   )
 }

@@ -7,15 +7,24 @@ import { auth, db, getLastMessage, getMessagesForRoom, getUserData, markLastMess
 import Arrow from '../../components/Arrow';
 import { convertTo24HourFormat, generateRoomId, generateUniqueId } from '../../lib/utils';
 import { collection, doc, getDoc, limit, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
+import { useChatContext } from '../../context/ChatContext';
 
 const ChatScreen = () => {
+  const { loading,getRoomMessages } = useChatContext()
   const [messages, setMessages] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [lastMessage, setLastMessage] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [roomId, setRoomId] = useState(null);
   const user = auth.currentUser;
 
   const router = useRouter();
+
+  useEffect(() => {
+    
+    if (roomId) {
+      setMessages(getRoomMessages(roomId)); // Extract messages for the specific room
+    }
+  }, [roomId, getRoomMessages]);
 
   const isScreenFocused = useRef(false); // Track if the screen is focused
 
@@ -25,7 +34,7 @@ const ChatScreen = () => {
 
       // Mark unseen messages as seen when the screen comes into focus
       const unseenMessages = messages.filter(
-        (message) => message.status === 'sent' && message.to === user.uid
+        (message) => (message.status === 'delivered' || message.status === 'sent') && message.to === user.uid
       );
 
       unseenMessages.forEach((message) => {
@@ -57,7 +66,7 @@ const ChatScreen = () => {
         setLastMessage(lastMessageData);
       });
     }
-    console.log("Last")
+  
     }
     , [messages]);
 
@@ -99,6 +108,7 @@ const ChatScreen = () => {
     if (user) {
       getUserData(user.uid).then((userData) => {
         setCurrentUser(userData);
+        setRoomId(generateRoomId(userData?.userId, contactData?.userId));
       });
     }
   }, []);
@@ -109,70 +119,7 @@ const ChatScreen = () => {
   }, [messages]);
 
 
-  useEffect(() => {
-   if(currentUser && contactData){
 
-   setLoading(true);
-    getMessagesForRoom(generateRoomId(currentUser?.userId, contactData?.userId)).then((messages) => {
-      setMessages(messages);
-      setLoading(false);
-    });
-   }
-  }, [currentUser]);
-
-// Function to listen for messages across all rooms where the current user is a participant
-useEffect(() => {
-  if (currentUser && contactData) {
-    const roomId = generateRoomId(currentUser?.userId, contactData?.userId);
-    const messagesRef = collection(db, 'chats', roomId, 'messages');
-    const q = query(messagesRef, orderBy('timestamp', 'asc'), limit(50));
-
-    console.log('Listening for messages in Firestore for room ID:', roomId);
-
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      console.log(
-        'Firestore query snapshot triggered. Total messages fetched:',
-        querySnapshot.size
-      );
-
-      const firestoreMessages = querySnapshot.docs.map((doc) => ({
-        ...doc.data(),
-        id: doc.id,
-      }));
-
-      setMessages((prevMessages) => {
-        const updatedMessages = prevMessages.map((localMessage) => {
-          const matchedFirestoreMessage = firestoreMessages.find(
-            (firestoreMessage) => firestoreMessage.id === localMessage.id
-          );
-
-          if (matchedFirestoreMessage) {
-            return { ...localMessage, ...matchedFirestoreMessage };
-          }
-          return localMessage;
-        });
-
-        const newMessages = firestoreMessages.filter(
-          (firestoreMessage) =>
-            !prevMessages.some((localMessage) => localMessage.id === firestoreMessage.id)
-        );
-
-        const filteredNewMessages = newMessages.filter(
-          (message) => message.from !== user?.uid
-        );
-
-        console.log("Filtered Messages: ", filteredNewMessages)
-
-        return [...updatedMessages, ...filteredNewMessages];
-      });
-    });
-
-    return () => {
-      console.log('Cleaning up Firestore listener for room ID:', roomId);
-      unsubscribe();
-    };
-  }
-}, [currentUser, contactData]);
 
 
 

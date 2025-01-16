@@ -8,121 +8,29 @@ import {
   TouchableOpacity,
   Image,
   TextInput,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, getUserRoomsAndParticipants, db, fetchParticipantsData } from '../../lib/firebase'; // Update import path as necessary
 import { formatMessageDate } from '../../lib/utils';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useChatContext } from '../../context/ChatContext';
 
 const Messaging = () => {
   const router = useRouter();
-  const [userRooms, setUserRooms] = useState([]);
-
-  
-
-  useEffect(() => {
-
-    const fetchRooms = () => {
-      try {
-       getUserRoomsAndParticipants(auth.currentUser.uid).then((rooms) => {
-         
-         setUserRooms(rooms)
-         console.log("Last message : ", rooms[0].lastMessage)
-         console.log("Last message status : ", rooms[0].lastMessageStatus)
-       });
-       
-      } catch (error) {
-        console.error('Error fetching rooms:', error);
-      }
-    };
-  
-    fetchRooms();
-  }, []);
+  const { rooms,loading } = useChatContext()
   
   useEffect(() => {
-    console.log("Setting up real-time listener for rooms...");
-  
-    const roomsQuery = query(
-      collection(db, "chats"),
-      where("participants", "array-contains", auth.currentUser.uid)
-    );
-  
-    const unsubscribe = onSnapshot(roomsQuery, async (querySnapshot) => {
-
-  
-      const firestoreRooms = querySnapshot.docs
-        .map((doc) => {
-          const data = doc.data();
-          return data ? { ...data, roomId: doc.id } : null;
-        })
-        .filter(Boolean); // Remove null values
-  
-      setUserRooms((prevRooms) => {
-        // Merge and deduplicate data
-        const updatedRooms = prevRooms.map((localRoom) => {
-          const matchedFirestoreRoom = firestoreRooms.find(
-            (firestoreRoom) => firestoreRoom.roomId === localRoom.roomId
-          );
-  
-          if (matchedFirestoreRoom) {
-            return {
-              ...localRoom,
-              ...matchedFirestoreRoom,
-            };
-          }
-  
-          return localRoom;
-        });
-  
-        const newRooms = firestoreRooms.filter(
-          (firestoreRoom) =>
-            !prevRooms.some((localRoom) => localRoom.roomId === firestoreRoom.roomId)
-        );
-  
-        const finalRooms = [...updatedRooms, ...newRooms];
-  
-        // Fetch participantsData for rooms where it's missing
-        const updatedFinalRooms = finalRooms.map(async (room) => {
-          if (!room.participantsData || room.participantsData.length === 0) {
-            const participantsData = await fetchParticipantsData(
-              room.participants,
-              auth.currentUser.uid
-            );
-            return {
-              ...room,
-              participantsData, // Add participantsData
-            };
-          }
-          return room; // Return room as is if participantsData exists
-        });
-  
-        // Wait for all participant data to resolve
-        Promise.all(updatedFinalRooms).then((resolvedRooms) => {
-          const deduplicatedRooms = resolvedRooms.filter(
-            (room, index, self) =>
-              room &&
-              self.findIndex((r) => r.roomId === room.roomId) === index
-          );
-  
-          console.log("Updated state:", JSON.stringify(deduplicatedRooms, null, 2));
-          setUserRooms(deduplicatedRooms);
-        });
-  
-        return prevRooms; // Maintain consistency while async processing resolves
-      });
-    });
-  
-    // Cleanup listener when the component unmounts
-    return () => unsubscribe();
-  }, [auth.currentUser.uid]);
+   console.log(rooms)
+  }, [loading])
   
   
   
   
   
-  
-  const sortedRooms = [...userRooms].sort((a, b) => {
+  const sortedRooms = [...rooms].sort((a, b) => {
     if (!a?.lastUpdated || !b?.lastUpdated) {
       return 0; // Treat rooms without timestamps as equal
     }
@@ -149,6 +57,11 @@ const Messaging = () => {
     </View>
   
     {/* Contacts ScrollView */}
+    { loading ? 
+                     <View className="flex-1 h-full w-full justify-center items-center" >
+                       <ActivityIndicator size="large" color="#ffffff" />
+                     </View>
+                  :
     <ScrollView className="mt-5 max-h-[84%]">
       {sortedRooms.map((room, index) => (
         <TouchableOpacity
@@ -200,7 +113,7 @@ const Messaging = () => {
         </TouchableOpacity>
       ))}
     </ScrollView>
-  
+}
     <TouchableOpacity
       onPress={() => router.push('/contacts')}
       className="w-14 h-14 bg-white absolute rounded-full right-8 bottom-24 flex justify-center items-center"
