@@ -10,7 +10,7 @@ import { collection, doc, getDoc, limit, onSnapshot, orderBy, query, updateDoc }
 import { useChatContext } from '../../context/ChatContext';
 
 const ChatScreen = () => {
-  const { loading,getRoomMessages } = useChatContext()
+  const { loading,getRoomMessages,isChatScreenFocused } = useChatContext()
   const [messages, setMessages] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [lastMessage, setLastMessage] = useState(null);
@@ -31,6 +31,8 @@ const ChatScreen = () => {
   useFocusEffect(
     React.useCallback(() => {
       isScreenFocused.current = true;
+      isChatScreenFocused.current = true;
+
 
       // Mark unseen messages as seen when the screen comes into focus
       const unseenMessages = messages.filter(
@@ -53,9 +55,20 @@ const ChatScreen = () => {
 
       return () => {
         isScreenFocused.current = false; // Reset on screen blur
+     
+        isChatScreenFocused.current = false;
+       
       };
     }, [messages, currentUser, contactData])
   );
+
+useEffect(() => {
+  console.log("Contact Data: ", contactData);
+
+}
+, [contactData]);
+  
+  
 
 
   useEffect(() => {
@@ -139,7 +152,7 @@ const ChatScreen = () => {
 
   // Function to scroll to the end of the FlatList
   const scrollToEnd = () => {
-    flatListRef.current?.scrollToEnd();
+    flatListRef.current?.scrollToEnd({animated:false});
   };
   
 
@@ -191,25 +204,19 @@ const ChatScreen = () => {
 
 
 
-  const renderMessage = ({ item }) => {
+  const RenderMessage = React.memo(({ item }) => {
     if (!item || !item.message) return null; // Ensure valid message object
-
+  
     const isSender = item?.from !== contactData?.userId;
-    let cleanedTimestamp=''
+    let cleanedTimestamp = '';
     if (item?.timestamp.length === 24) {
-      // Remove characters from position 17 to 19
-       cleanedTimestamp = item.timestamp.slice(0, 17) + item.timestamp.slice(19);
+      cleanedTimestamp = item.timestamp.slice(0, 17) + item.timestamp.slice(19);
+    } else {
+      cleanedTimestamp = item.timestamp.slice(0, 16) + item.timestamp.slice(19);
     }
-    else{
-      cleanedTimestamp=item.timestamp.slice(0, 16) + item.timestamp.slice(19);
-    }
-
-    // console.log(item.messageId);
-
-    // Determine the status icon
+  
     let StatusIcon;
-    let iconColor = '#FFFFFF'; // Default color for icons
-
+    let iconColor = '#FFFFFF';
     switch (item.status) {
       case 'pending':
         StatusIcon = <Ionicons name="time-outline" size={14} color={iconColor} />;
@@ -226,8 +233,7 @@ const ChatScreen = () => {
       default:
         StatusIcon = <Ionicons name="time-outline" size={14} color={iconColor} />;
     }
-    
-
+  
     return (
       <View
         style={[
@@ -240,7 +246,12 @@ const ChatScreen = () => {
         {isSender && <Text className="self-end">{StatusIcon}</Text>}
       </View>
     );
+  });
+  
+  const renderMessage = ({ item }) => {
+    return <RenderMessage item={item} />;
   };
+  
 
  
   // Sort the messages based on dateTime in ascending order
@@ -289,13 +300,17 @@ const ChatScreen = () => {
                  </View>
                </Modal> :
       <FlatList
-        ref={flatListRef}
-        data={sortedMessages}
-        keyExtractor={(item) => item?.messageId || item?.id}
-        renderItem={renderMessage}
-        contentContainerStyle={styles.chatContainer}
-        onContentSizeChange={scrollToEnd} // Scroll to the end when content changes
-      />
+      ref={flatListRef}
+      data={sortedMessages}
+      keyExtractor={(item) => item?.messageId || item?.id}
+      renderItem={renderMessage}
+      contentContainerStyle={styles.chatContainer}
+      onContentSizeChange={scrollToEnd}
+      initialNumToRender={50} // Initial render limit
+      maxToRenderPerBatch={5}  // Control batch rendering
+      windowSize={21}          // Total number of items (onscreen + offscreen)
+      removeClippedSubviews={true} // Improve scrolling performance for large lists
+    />
     }
       <View className={`flex-row items-center p-[10px] border-t border-[#3C4858] ${loading ? "absolute bottom-0" : ""}`}>
         <TextInput

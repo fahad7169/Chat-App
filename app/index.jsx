@@ -4,11 +4,16 @@ import OnBoarding from '../components/OnBoarding';
 import { useRouter } from 'expo-router';
 import { auth } from '../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import * as BackgroundFetch from 'expo-background-fetch';
+
+
 
 const App = () => {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const router = useRouter();
+
+
 
   useEffect(() => {
     // Listen for authentication state changes
