@@ -59,12 +59,12 @@ export const NotificationProvider = ({ children }) => {
         responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
            const { contact } = response.notification.request.content.data;
          
-           setTimeout(() => {
-            router.push({
+         
+            router.replace({
               pathname: `/chats/${contact.userId}`,
               params: { contact : JSON.stringify(contact) }
             })
-           }, 200);
+        
         
 
         });

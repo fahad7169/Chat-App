@@ -1,19 +1,23 @@
 import { View, Text, ScrollView, Image } from 'react-native'
-import React from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { images } from '../constants'
 import CustomButton from './CustomButton'
 import { useRouter } from 'expo-router'
+import { auth } from '../lib/firebase'
+
 
 
 
 const OnBoarding = () => {
-  const router  = useRouter()
+  
+const router = useRouter()
+  
+
  
  
   return (
-    <SafeAreaView className="h-full w-full bg-[#1F2833]">
-      <ScrollView className="flex-1 ">
+    <SafeAreaView className={`h-full w-full bg-[#1F2833]`}>
+      <ScrollView className={`${auth.currentUser ? 'hidden' : 'flex-1'}`}>
         <View className="w-full items-center mt-28">
           <Image
            source={images?.onboarding}

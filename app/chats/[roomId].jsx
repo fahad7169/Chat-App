@@ -10,23 +10,31 @@ import { collection, doc, getDoc, limit, onSnapshot, orderBy, query, updateDoc }
 import { useChatContext } from '../../context/ChatContext';
 
 const ChatScreen = () => {
-  const { loading,getRoomMessages,isChatScreenFocused } = useChatContext()
-  const [messages, setMessages] = useState([]);
+  const { loading,rooms,isChatScreenFocused,messages,roomIndex } = useChatContext()
+  const [localmessages, setLocalMessages] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
-  const [lastMessage, setLastMessage] = useState(null);
   const [roomId, setRoomId] = useState(null);
   const user = auth.currentUser;
 
   const router = useRouter();
 
-  useEffect(() => {
-    
-    if (roomId) {
-      setMessages(getRoomMessages(roomId)); // Extract messages for the specific room
-    }
-  }, [roomId, getRoomMessages]);
+  const isScreenFocused = useRef(false);
 
-  const isScreenFocused = useRef(false); // Track if the screen is focused
+  useEffect(() => {
+  
+     if(!loading && rooms.length>0){
+      setLocalMessages(messages[rooms[roomIndex.current]?.roomId] || []);
+      scrollToEnd(false);
+      
+     }
+    
+  }, [messages]);
+
+ 
+  
+  
+  
+
 
   useFocusEffect(
     React.useCallback(() => {
@@ -34,8 +42,9 @@ const ChatScreen = () => {
       isChatScreenFocused.current = true;
 
 
-      // Mark unseen messages as seen when the screen comes into focus
-      const unseenMessages = messages.filter(
+     if (roomId) {
+       // Mark unseen messages as seen when the screen comes into focus
+       const unseenMessages = localmessages.filter(
         (message) => (message.status === 'delivered' || message.status === 'sent') && message.to === user.uid
       );
 
@@ -43,7 +52,7 @@ const ChatScreen = () => {
         const messageDocRef = doc(
           db,
           'chats',
-          generateRoomId(currentUser?.userId, contactData?.userId),
+         roomId,
           'messages',
           message.id
         );
@@ -52,63 +61,45 @@ const ChatScreen = () => {
           console.log('Message marked as seen:', message.id);
         });
       });
-
+    }
       return () => {
         isScreenFocused.current = false; // Reset on screen blur
      
         isChatScreenFocused.current = false;
        
       };
-    }, [messages, currentUser, contactData])
+    }, [messages, currentUser, contactData,roomId])
   );
 
-useEffect(() => {
-  console.log("Contact Data: ", contactData);
 
-}
-, [contactData]);
-  
   
 
 
   useEffect(() => {
-    if(currentUser && contactData && messages.length > 0){
-      const roomId = generateRoomId(currentUser?.userId, contactData?.userId);
-
-      getLastMessage(roomId).then((lastMessageData) => {
-        setLastMessage(lastMessageData);
-      });
-    }
-  
-    }
-    , [messages]);
-
-
-
-  useEffect(() => {
-    const markMessagesAsSeen = async () => {
-      try {
-      if(currentUser && contactData && messages.length > 0 && lastMessage?.lastMessageStatus !== 'seen' && lastMessage?.lastMessageTo === currentUser?.userId){
-
-        const roomId = generateRoomId(currentUser?.userId, contactData?.userId);
-
+     const updateLastMessageStatus = async () => {
+      if(currentUser && contactData && localmessages.length > 0 && roomId){
         const roomRef = doc(db, "chats", roomId);
 
-         // Check if the room exists
-      const roomDoc = await getDoc(roomRef);
-      if (roomDoc.exists()) {
-        console.log("Room exists, updating last message status to 'seen'");
-        await markLastMessageAsSeen(generateRoomId(currentUser?.userId, contactData?.userId));
-      
+        const lastMessage = localmessages[localmessages.length - 1];
+        if (lastMessage && lastMessage.to === currentUser?.userId) {
+          await updateDoc(roomRef, {
+            lastMessageStatus: "seen",
+          });
+        
+        }
+       
+        
     }
-      }
-      } catch (error) {
-        console.error("Error marking messages as seen:", error);
-      }
-    };
+     }
+
+     updateLastMessageStatus().then(() => {
+      console.log("Last message marked as seen!")
+     })
+
   
-    markMessagesAsSeen();
-  }, [messages, currentUser, contactData, lastMessage]);
+    } , [localmessages]);
+
+
   
   
 
@@ -126,10 +117,7 @@ useEffect(() => {
     }
   }, []);
 
-  useEffect(() => {
-    scrollToEnd();
-   
-  }, [messages]);
+ 
 
 
 
@@ -151,8 +139,10 @@ useEffect(() => {
 
 
   // Function to scroll to the end of the FlatList
-  const scrollToEnd = () => {
-    flatListRef.current?.scrollToEnd({animated:false});
+  const scrollToEnd = (animated) => {
+    if (isListReady && sortedMessages.length > 0) {
+      flatListRef.current?.scrollToIndex({ index: sortedMessages.length - 1, animated: animated });
+    }
   };
   
 
@@ -181,25 +171,42 @@ useEffect(() => {
       }),
     };
   
-    scrollToEnd();
+   
   
     // Add the new message with the pending status and dummy ID
-    setMessages((prevMessages) => [...prevMessages, newMsg]);
+    setLocalMessages((prevMessages) => [...prevMessages, newMsg]);
   
     setNewMessage('');
   
     // Now send the message and wait for the real messageId
-    const messageId = await sendMessage(newMsg.room, newMsg.from?.userId, newMsg.to?.userId, newMsg.message, newMsg.timestamp);
+    sendMessage(newMsg.room, newMsg.from?.userId, newMsg.to?.userId, newMsg.message, newMsg.timestamp).then((realMessageId) => {
+      if (realMessageId) {
+        // Update the message with the real ID and status
+        const updatedMessage = {
+          ...newMsg,
+          messageId: realMessageId, // Replace the dummy ID with the real one
+          status: "sent",           // Set the status to "sent"
+        };
+        setLocalMessages((prevMessages) =>
+          prevMessages.map((msg) =>
+            msg.messageId === dummyMessageId
+              ? updatedMessage
+              : msg
+          )
+        );
+      }
+    });
   
-    // After receiving the real messageId, update the message status and ID
-    setMessages((prevMessages) =>
-      prevMessages.map((msg) =>
-        msg.messageId === dummyMessageId
-          ? { ...msg, messageId, id: messageId, status: "sent" } // Update the dummy message with real ID and status
-          : msg
-      )
-    );
+   
   };
+
+  const [isListReady, setListReady] = useState(false);
+
+  // Dynamically scroll to the last message when the content is ready
+  useEffect(() => {
+   scrollToEnd(false)
+    
+  }, [isListReady,sortedMessages]);
   
 
 
@@ -255,7 +262,7 @@ useEffect(() => {
 
  
   // Sort the messages based on dateTime in ascending order
-  const sortedMessages = [...messages].sort((a, b) => {
+  const sortedMessages = [...localmessages].sort((a, b) => {
     if (!a || !b || !a?.timestamp || !b?.timestamp) {
       return 0; // If any timestamp is null/undefined, treat them as equal
     }
@@ -294,7 +301,7 @@ useEffect(() => {
           <MaterialIcons name="videocam" size={24} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
-    </View>{ loading ?   <Modal transparent={true} animationType="none">
+    </View>{ (loading && sortedMessages.length === 0)?   <Modal transparent={true} animationType="none">
                  <View className="flex-1 h-full w-full justify-center items-center" >
                    <ActivityIndicator size="large" color="#ffffff" />
                  </View>
@@ -305,11 +312,18 @@ useEffect(() => {
       keyExtractor={(item) => item?.messageId || item?.id}
       renderItem={renderMessage}
       contentContainerStyle={styles.chatContainer}
-      onContentSizeChange={scrollToEnd}
-      initialNumToRender={50} // Initial render limit
-      maxToRenderPerBatch={5}  // Control batch rendering
-      windowSize={21}          // Total number of items (onscreen + offscreen)
-      removeClippedSubviews={true} // Improve scrolling performance for large lists
+      getItemLayout={(data, index) => ({
+        length: 2000, // Approximate height of each message
+        offset: 70 * index,
+        index,
+      })}
+      ListEmptyComponent={
+        <Text style={{ textAlign: 'center', marginTop: 20, color: 'gray' }}>
+          No messages yet. Start a conversation!
+        </Text>
+      }
+      onContentSizeChange={() => setListReady(true)} // Set list as ready once content is fully loaded
+      onScrollToIndexFailed={() => flatListRef.current?.scrollToOffset({ offset: 0, animated: false })} // Handle failure
     />
     }
       <View className={`flex-row items-center p-[10px] border-t border-[#3C4858] ${loading ? "absolute bottom-0" : ""}`}>
@@ -322,8 +336,8 @@ useEffect(() => {
           multiline={true} // Allows the input to expand vertically
           textAlignVertical="top" // Ensures the text aligns properly when multiline
         />
-        <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
-          <Text style={styles.sendButtonText}>Send</Text>
+        <TouchableOpacity style={styles.sendButton} onPress={handleSend} disabled={!newMessage}>
+          <Ionicons name="send" size={20} color={`${newMessage ? "#FFFFFF" : "#aaa"}`} />
         </TouchableOpacity>
       </View>
     </SafeAreaView>

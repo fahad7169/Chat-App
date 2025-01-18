@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import CountryPicker,{ Flag } from 'react-native-country-picker-modal'
 import Arrow from '../../components/Arrow'
 import ArrowRight from '../../components/ArrowRight'
-import { Stack, useRouter } from 'expo-router'
+import { Stack, useFocusEffect, useRouter } from 'expo-router'
 import { FontAwesome5 } from '@expo/vector-icons'
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 
@@ -24,7 +24,6 @@ import Animated, {
 } from 'react-native-reanimated';
 
 
-import { useFocusEffect } from '@react-navigation/native'
 import { firebaseConfig, saveUserDetails, sendOTP, verifyOTP } from '../../lib/firebase'
 import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha'
 
@@ -34,14 +33,15 @@ import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha'
 const SignIn = () => {
 
 
-  useFocusEffect(
-    React.useCallback(() => {
-      // Reset OTP and index when screen comes into focus
-      setOtp('');
-      setTimer(60);
-      setScreenIndex(0);
-    }, [])
-  );
+ 
+   useFocusEffect(
+     React.useCallback(() => {
+        setScreenIndex(0);
+        setTimer(60);
+
+      
+     }, [])
+   );
 
   const [country, setCountry] = useState({
     cca2: 'PK', // Default country ISO code

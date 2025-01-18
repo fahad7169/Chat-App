@@ -17,33 +17,33 @@ import { formatMessageDate } from '../../lib/utils';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useChatContext } from '../../context/ChatContext';
+import * as SplashScreen from 'expo-splash-screen';
 
 const Messaging = () => {
   const router = useRouter();
-  const { rooms,loading } = useChatContext()
+  const { rooms,loading,roomIndex } = useChatContext()
   
   useEffect(() => {
    console.log(rooms)
   }, [loading])
-  
-  
-  
-  
-  
-  const sortedRooms = [...rooms].sort((a, b) => {
-    if (!a?.lastUpdated || !b?.lastUpdated) {
-      return 0; // Treat rooms without timestamps as equal
+
+  useEffect(() => {
+    if(!loading){
+      SplashScreen.hideAsync();
     }
-    const timeA = new Date(a.lastUpdated).getTime();
-    const timeB = new Date(b.lastUpdated).getTime();
-    return timeB - timeA; // Sort in descending order (latest message first)
-  });
+  }, [loading])
+
+
+  
+  
+  
+  
   
   
  
 
   return (
-    <SafeAreaView className="flex-1 bg-[#1F2833] pt-5">
+    <SafeAreaView className="flex-1 bg-[#1F2833] pt-5 relative">
     {/* Header */}
     <View className="flex-row items-center mx-5 border rounded-lg border-[#ffffff] px-3 py-2">
       <TextInput
@@ -58,20 +58,26 @@ const Messaging = () => {
   
     {/* Contacts ScrollView */}
     { loading ? 
-                     <View className="flex-1 h-full w-full justify-center items-center" >
+                     <View className="w-screen h-screen flex-1 absolute self-center justify-center items-center" >
                        <ActivityIndicator size="large" color="#ffffff" />
                      </View>
                   :
     <ScrollView className="mt-5 max-h-[84%]">
-      {sortedRooms.map((room, index) => (
+      {(!loading && rooms.length === 0) ? <View className="flex-1 absolute justify-center items-center self-center">
+        <Text className="text-[#ffffff] text-lg">No conversations yet! Send a </Text>
+        <Text className="text-[#ffffff] text-lg">message to start a conversation.</Text>
+      </View> : rooms.map((room, index) => (
         <TouchableOpacity
           key={room?.roomId}
           className="flex-row items-center py-3 px-4 border-b-[1px] border-[#232533]"
           onPress={() =>
+           {
+            roomIndex.current = index
             router.push({
               pathname: `/chats/${room?.participantsData[index]?.userId}`,
               params: { contact: JSON.stringify(room?.participantsData[index]) },
             }) // Navigate to chat screen
+           }
           }
           activeOpacity={0.7}
         >
@@ -111,7 +117,8 @@ const Messaging = () => {
             </View>
           )}
         </TouchableOpacity>
-      ))}
+      ))
+      }
     </ScrollView>
 }
     <TouchableOpacity
